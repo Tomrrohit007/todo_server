@@ -13,18 +13,19 @@ process.on("uncaughtException", (err: Error) => {
   process.exit(1);
 });
 
+
 const app: Express = express();
 app.use(express.json());
 app.use(cors());
 
 app.use((req: Request, res: Response, next: NextFunction) => {
+   console.log(`${req.method} ${req.originalUrl}`);
   next();
 });
 
 app.use("/tasks", TaskRouter);
 app.use("/users", UserRouter);
 
-// If given route doesn't match with any routes in our app then this middleware will be executed
 app.all("*", (req: Request, res: Response, next: NextFunction):void => {
   next(
     new ErrorHandler(`Cannot find the ${req.originalUrl} route on the server!`, 404)
@@ -41,6 +42,9 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction): void => {
     message: err.message,
   });
 });
+
+
+// If given route doesn't match with any routes in our app then this middleware will be executed
 
 mongoose.connect(process.env.MONGODB_URI!);
 

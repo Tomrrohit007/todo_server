@@ -1,11 +1,16 @@
 import UserModel, { IUser } from "../Models/User.Model";
 import { Request, Response, NextFunction } from "express";
-import { CatchAsync } from "../utils/classes";
+import { APIFeatures, CatchAsync } from "../utils/classes";
 
-exports.createUser = CatchAsync(
+exports.getUsers = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const newUser: IUser = await UserModel.create(req.body);
-    res.status(200).json({ status: "success", data: newUser });
+    const feature = new APIFeatures(UserModel.find(), req.query)
+      .filter()
+      .sorting()
+      .limitFields();
+    const allUser = await feature.query.exec();
+
+    res.status(200).json({ count: allUser.length, data: allUser });
   }
 );
 
@@ -23,3 +28,4 @@ exports.updateUser = CatchAsync(
     res.status(200).json({ status: "success", data: newTask });
   }
 );
+

@@ -5,6 +5,14 @@ export enum Gender {
 }
 
 
+export enum Roles {
+  admin = "admin",
+  user = "user",
+  staff = "staff"
+}
+
+export const roles =  [Roles.admin, Roles.staff, Roles.user]
+
 export enum Country {
   Afghanistan = "Afghanistan",
   Albania = "Albania",
