@@ -3,12 +3,13 @@ import { Request, Response, NextFunction } from "express";
 import { CatchAsync, ErrorHandler } from "../utils/classes";
 import jwt from "jsonwebtoken";
 import { Roles } from "../Types/enums";
+import sendEmail from "../utils/email";
 
 interface CustomRequest extends Request {
-  user?: any; 
+  user?: any;
 }
 
-exports.restrictTo = (...roles:Roles[]) => {
+exports.restrictTo = (...roles: Roles[]) => {
   return (req: CustomRequest, res: Response, next: NextFunction): void => {
     if (!roles.includes(req.user.role)) {
       return next(
@@ -62,14 +63,12 @@ const sendToken = (user: IUser, code: number, res: Response): void => {
   });
 };
 
-
 exports.createUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const newUser: IUser = await UserModel.create(req.body);
     createTokenAndSend(newUser, 200, res);
   }
 );
-
 
 exports.loginUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -203,21 +202,20 @@ exports.passwordBeforeSaving = CatchAsync(
 );
 
 exports.forgotPassword = CatchAsync(
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
-
-    const user = await UserModel.findOne({email:req.body.email})
-    if(!user){
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const user = await UserModel.findOne({ email: req.body.email });
+    if (!user) {
       next(
         new ErrorHandler(`User with email:${req.body.email} doesn't exist`, 404)
       );
     }
-    user!.sendResetPasswordToken();
-    await user!.save({validateBeforeSave:false})
-    next();
+    const resetLink = user!.sendResetPasswordToken();
+    await user!.save({ validateBeforeSave: false });
+    sendEmail(user!.email, user!.name, resetLink);
+    res.status(200).json({
+      status: "success",
+      message: "Please check your email for reset password",
+    });
   }
 );
 

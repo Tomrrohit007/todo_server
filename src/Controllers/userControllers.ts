@@ -24,7 +24,6 @@ exports.updateUser = CatchAsync(
         new: true,
       }
     );
-
     res.status(200).json({ status: "success", data: newTask });
   }
 );
