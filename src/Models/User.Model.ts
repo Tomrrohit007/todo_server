@@ -94,6 +94,18 @@ const userSchema: Schema<IUser> = new Schema<IUser>({
   }
 );
 
+(userSchema.pre as any)(
+  "save",
+  async function (this: IUser, next: NextFunction) {
+    if (!this.isModified("password") || this.isNew) {
+      next();
+    }
+
+    this.passwordChangeAt = new Date(Date.now() - 1000);
+    next();
+  }
+);
+
 userSchema.methods.correctPassword = async function (
   hashedPassword: string,
   userPassword: string

@@ -3,10 +3,13 @@ import { Request, Response, NextFunction } from "express";
 import { CatchAsync, ErrorHandler } from "../utils/classes";
 import jwt from "jsonwebtoken";
 import { Roles } from "../Types/enums";
-import sendEmail from "../utils/email";
+import Email from "../utils/email";
+import crypto from "crypto";
 
-interface CustomRequest extends Request {
+
+export interface CustomRequest extends Request {
   user?: any;
+  file?:any;
 }
 
 exports.restrictTo = (...roles: Roles[]) => {
@@ -22,6 +25,10 @@ exports.restrictTo = (...roles: Roles[]) => {
     next();
   };
 };
+
+const createHashed = (token:string):string =>{
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 const jwtToken = (id: string) =>
   jwt.sign({ id }, process.env.JWT_SECRET as string, {
@@ -66,6 +73,7 @@ const sendToken = (user: IUser, code: number, res: Response): void => {
 exports.createUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const newUser: IUser = await UserModel.create(req.body);
+    new Email(newUser).sendWelcome();
     createTokenAndSend(newUser, 200, res);
   }
 );
@@ -209,41 +217,40 @@ exports.forgotPassword = CatchAsync(
         new ErrorHandler(`User with email:${req.body.email} doesn't exist`, 404)
       );
     }
-    const resetLink = user!.sendResetPasswordToken();
-    await user!.save({ validateBeforeSave: false });
-    sendEmail(user!.email, user!.name, resetLink);
+    const resetToken = user!.sendResetPasswordToken();
+    const resetPasswordUrl = `${process.env.URL}/users/reset-password/${resetToken}`
+    if (user) {
+      await user.save({ validateBeforeSave: false });
+      new Email(user, resetPasswordUrl).sendPasswordReset();
+    }
     res.status(200).json({
       status: "success",
       message: "Please check your email for reset password",
+      resetPasswordUrl
     });
   }
 );
 
 exports.resetPassword = CatchAsync(
   async (
-    req: CustomRequest,
+    req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
-    if (!req.body.currentPassword) {
+    console.log(req.params.token);
+    const hashedToken = createHashed(req.params.token);
+    const user = await UserModel.findOne({ passwordResetToken: hashedToken });
+    if (!user) {
       return next(
-        new ErrorHandler(
-          "Current Password is required to perform this action",
-          401
-        )
+        new ErrorHandler("Token doesn't match or it is expired", 400)
       );
     }
-    const user = (await UserModel.findById(req.user.id).select(
-      "+password"
-    )) as IUser;
-    if (
-      !(await user.correctPassword(
-        req.body.currentPassword,
-        user.password as string
-      ))
-    ) {
-      return next(new ErrorHandler("Incorrect current password", 401));
-    }
-    next();
+    user.password = req.body.password;
+    user.confirmPassword = req.body.confirmPassword;
+    user.passwordResetToken = undefined;
+    user.resetTokenExpiresIn = undefined;
+    await user.save();
+
+    sendToken(user, 200, res);
   }
 );

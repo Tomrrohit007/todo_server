@@ -31,6 +31,13 @@ export class APIFeatures {
     }
     return this;
   }
+  public pagination():APIFeatures{
+     const page = this.queryStr.page - 1 || 0;
+     const limit = this.queryStr.limit;
+     const skips = page * limit;
+     this.query.skip(skips).limit(limit);
+     return this;
+  }
 }
 
 export class ErrorHandler extends Error {

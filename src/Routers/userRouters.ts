@@ -9,7 +9,7 @@ UserRouter.route("/signup").post(AuthController.createUser);
 
 UserRouter.route("/forgot-password").post(AuthController.forgotPassword);
 
-UserRouter.route("/reset-password").post(AuthController.resetPassword);
+UserRouter.route("/reset-password/:token").post(AuthController.resetPassword);
 
 //Protected
 UserRouter.route("/").get(
@@ -17,9 +17,24 @@ UserRouter.route("/").get(
   AuthController.restrictTo("admin"),
   UserController.getUsers
 );
-UserRouter.route("/:id").patch(
-  AuthController.protectRoute,
-  UserController.updateUser
-);
+UserRouter.route("/:id")
+  .patch(
+    AuthController.protectRoute,
+    AuthController.passwordAndEmailCheck,
+    UserController.uploadUserPhoto,
+    UserController.hashImage,
+    UserController.updateUser
+  )
+  .delete(
+    AuthController.protectRoute,
+    AuthController.restrictTo("admin"),
+    UserController.beforeDeleteUser,
+    UserController.deleteUser
+  );
+  UserRouter.route("/profile").get(
+    AuthController.protectRoute,
+    UserController.currentUser
+  )
+
 
 export default UserRouter;
