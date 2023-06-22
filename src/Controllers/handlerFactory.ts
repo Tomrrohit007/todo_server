@@ -68,7 +68,7 @@ exports.updateOne = (Model: any) =>
     async (req: CustomRequest, res: Response, next: NextFunction): Promise<void> => {
       const doc = await Model.findByIdAndUpdate(
         req.params.id,
-        { ...req.body, image: req.user.imageUrl, publicId: req.user.publicId },
+        { ...req.body, image: req.user.image, publicId: req.user.publicId },
         {
           new: true,
           runValidators: true,

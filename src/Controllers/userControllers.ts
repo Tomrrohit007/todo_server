@@ -38,20 +38,22 @@ export const hashImage = async (
   if (!req.file) {
     return next();
   }
-  if (req.file.size > 5 * 1024 * 1024)
-    return next(
-      new ErrorHandler(`Please upload a file with size less than 5MB!`, 400)
-    );
+
   const publicId = req.user.publicId;
   if (publicId) {
     await cloudinary.uploader.destroy(publicId);
   }
 
+  const originalFilename = req.file.originalname.split(".")[0];
+  const currentDate = new Date().toLocaleDateString();
+  const filename = `${originalFilename}_${currentDate}`;
+
   const result = await cloudinary.uploader.upload(req.file.path, {
+    public_id: filename,
     folder: "user-images",
     format: "webp",
     transformation: [
-      { width: 800, height: 800, crop: "fill", gravity: "face", quality: 90 },
+      { width: 600, height: 600, crop: "fill", gravity: "face", quality: 80 },
     ],
   });
 
