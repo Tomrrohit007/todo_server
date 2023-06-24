@@ -8,6 +8,7 @@ export interface ITask extends mongoose.Document {
   date: Date;
   priority: Priority;
   status: string;
+  user: mongoose.Schema.Types.ObjectId;
 }
 
 const taskSchema: mongoose.Schema<ITask> = new mongoose.Schema({
@@ -36,6 +37,11 @@ const taskSchema: mongoose.Schema<ITask> = new mongoose.Schema({
     type: String,
     enum: ["Incomplete", "In Progress", "Completed"],
     default: "In Progress",
+  },
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "users",
+    required: [true, "Task must belong to a user"],
   },
 });
 

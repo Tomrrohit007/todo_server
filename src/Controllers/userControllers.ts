@@ -1,6 +1,6 @@
 import UserModel, { IUser } from "../Models/User.Model";
 import { Request, Response, NextFunction } from "express";
-import { ErrorHandler } from "../utils/classes";
+import { CatchAsync, ErrorHandler } from "../utils/classes";
 import { CustomRequest } from "../Controllers/authController";
 import multer from "multer";
 const cloudinary = require("../utils/cloudinary");
@@ -23,12 +23,10 @@ const multerFilter = (
   }
 };
 
-const upload = multer({
+export const uploadUserPhoto = multer({
   storage: multer.diskStorage({}),
   fileFilter: multerFilter,
-});
-
-export const uploadUserPhoto = upload.single("image");
+}).single("image");
 
 export const hashImage = async (
   req: CustomRequest,
@@ -36,7 +34,7 @@ export const hashImage = async (
   next: NextFunction
 ) => {
   if (!req.file) {
-    return next();
+    return next(new ErrorHandler("Please upload a image", 400));
   }
 
   const publicId = req.user.publicId;
@@ -46,7 +44,8 @@ export const hashImage = async (
 
   const originalFilename = req.file.originalname.split(".")[0];
   const currentDate = new Date().toLocaleDateString();
-  const filename = `${originalFilename}_${currentDate}`;
+  const currentTime = new Date().toLocaleTimeString().split(" ").join("_");
+  const filename = `${originalFilename}_${currentDate}_${currentTime}`;
 
   const result = await cloudinary.uploader.upload(req.file.path, {
     public_id: filename,
@@ -57,9 +56,14 @@ export const hashImage = async (
     ],
   });
 
-  (req.user as IUser).publicId = result.public_id;
-  (req.user as IUser).image = result.secure_url;
-  next();
+  await UserModel.findByIdAndUpdate(req.user._id, {
+    image: result.secure_url,
+    publicId: result.public_id,
+  });
+  res.status(200).json({
+    status: "success",
+    image: { url: result.secure_url, publicId: result.public_id },
+  });
 };
 
 export const destroyUserPhoto = async (
@@ -82,17 +86,20 @@ export const destroyUserPhoto = async (
 
 exports.getUsers = handlerFactory.getAll(UserModel);
 
-exports.currentUser = (
-  req: CustomRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  res.status(400).json({ status: "success", user: req.user });
-};
+exports.currentUser = CatchAsync(
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    const user = await UserModel.findById(req.user._id)
+      .select(
+        "-passwordChangeAt -resetTokenExpiresIn -passwordResetToken -role -__v -publicId"
+      )
+      .populate({path:"tasks", select:"-__v"});
+    res.status(200).json({ status: "success", user });
+  }
+);
 
 exports.updateUser = handlerFactory.updateOne(UserModel);
 
-exports.getUserProfile = handlerFactory.getOne(UserModel);
+exports.getUserProfile = handlerFactory.getOne(UserModel, {path:"tasks", select:"-__v"});
 
 exports.beforeDeleteUser = (
   req: CustomRequest,

@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import { APIFeatures, CatchAsync } from "../utils/classes";
 import { ErrorHandler } from "../utils/classes";
 
-
 export interface CustomRequest extends Request {
   user?: any;
   file?: any;
@@ -28,7 +27,9 @@ exports.getOne = (Model: any, popOptions?: any) =>
   CatchAsync(
     async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       let query = Model.findById(req.params.id);
-      if (popOptions) query = query.populate(popOptions);
+      if (popOptions) {
+        query = query.populate(popOptions);
+      }
 
       const doc = await query;
 
@@ -65,15 +66,15 @@ exports.deleteOne = (Model: any) =>
 //Update one
 exports.updateOne = (Model: any) =>
   CatchAsync(
-    async (req: CustomRequest, res: Response, next: NextFunction): Promise<void> => {
-      const doc = await Model.findByIdAndUpdate(
-        req.params.id,
-        { ...req.body, image: req.user.image, publicId: req.user.publicId },
-        {
-          new: true,
-          runValidators: true,
-        }
-      );
+    async (
+      req: CustomRequest,
+      res: Response,
+      next: NextFunction
+    ): Promise<void> => {
+      const doc = await Model.findByIdAndUpdate(req.params.id, req.body, {
+        new: true,
+        runValidators: true,
+      });
 
       if (!doc) {
         next(

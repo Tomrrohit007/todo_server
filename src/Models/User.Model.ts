@@ -26,63 +26,69 @@ export interface IUser extends Document {
   sendResetPasswordToken: () => string;
 }
 
-const userSchema: Schema<IUser> = new Schema<IUser>({
-  name: {
-    type: String,
-    required: true,
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    validate: {
-      validator: function (email: string): boolean {
-        return validator.isEmail(email);
-      },
-      message: "Invalid email address",
+const userSchema: Schema<IUser> = new Schema<IUser>(
+  {
+    name: {
+      type: String,
+      required: true,
     },
-  },
-  gender: {
-    type: String,
-    required: true,
-    enum: Object.values(Gender),
-  },
-  country: {
-    type: String,
-    required: true,
-    enum: Object.values(Country),
-  },
-  image: {
-    type: String,
-    default: "",
-  },
-  publicId: String,
-  password: {
-    type: String,
-    required: [true, "A password is required"],
-    minlength: [8, "A password must have a minimum length of 8 characters"],
-    select: false,
-  },
-  confirmPassword: {
-    type: String,
-    required: [true, "A password is required"],
-    minlength: [8, "A password must have a minimum length of 8 characters"],
-    validate: {
-      validator: function (this: IUser, el: string): boolean | string {
-        return el === this.password;
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      validate: {
+        validator: function (email: string): boolean {
+          return validator.isEmail(email);
+        },
+        message: "Invalid email address",
       },
-      message: "Passwords don't match",
     },
+    gender: {
+      type: String,
+      required: true,
+      enum: Object.values(Gender),
+    },
+    country: {
+      type: String,
+      required: true,
+      enum: Object.values(Country),
+    },
+    image: {
+      type: String,
+      default: "",
+    },
+    publicId: String,
+    role: {
+      type: String,
+      default: Roles.user,
+    },
+    password: {
+      type: String,
+      required: [true, "A password is required"],
+      minlength: [8, "A password must have a minimum length of 8 characters"],
+      select: false,
+    },
+    confirmPassword: {
+      type: String,
+      required: [true, "A password is required"],
+      minlength: [8, "A password must have a minimum length of 8 characters"],
+      validate: {
+        validator: function (this: IUser, el: string): boolean | string {
+          return el === this.password;
+        },
+        message: "Passwords don't match",
+      },
+    },
+    passwordChangeAt: Date,
+    passwordResetToken: String,
+    resetTokenExpiresIn: Date,
   },
-  role: {
-    type: String,
-    default: Roles.user,
-  },
-  passwordChangeAt: Date,
-  passwordResetToken: String,
-  resetTokenExpiresIn: Date,
-});
+  {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
+);
 
 (userSchema.pre as any)(
   "save",
@@ -134,6 +140,12 @@ userSchema.methods.sendResetPasswordToken = function (this: IUser): string {
 
   return resetToken;
 };
+
+userSchema.virtual("tasks", {
+  ref: "tasks",
+  foreignField: "user",
+  localField: "_id"
+});
 
 const UserModel = mongoose.model<IUser>("users", userSchema);
 

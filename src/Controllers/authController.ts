@@ -6,10 +6,15 @@ import { Roles } from "../Types/enums";
 import Email from "../utils/email";
 import crypto from "crypto";
 
+interface CookieOptions {
+  expires: Date;
+  secure?: boolean;
+  httpOnly: boolean;
+}
 
 export interface CustomRequest extends Request {
   user?: any;
-  file?:any;
+  file?: any;
 }
 
 exports.restrictTo = (...roles: Roles[]) => {
@@ -26,9 +31,9 @@ exports.restrictTo = (...roles: Roles[]) => {
   };
 };
 
-const createHashed = (token:string):string =>{
+const createHashed = (token: string): string => {
   return crypto.createHash("sha256").update(token).digest("hex");
-}
+};
 
 const jwtToken = (id: string) =>
   jwt.sign({ id }, process.env.JWT_SECRET as string, {
@@ -41,10 +46,11 @@ const createTokenAndSend = (user: IUser, code: number, res: Response): void => {
   user.passwordChangeAt = undefined;
 
   const token = jwtToken(user._id);
-  const cookieOptions = {
+  const cookieOptions: CookieOptions = {
     expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     httpOnly: true,
   };
+  if (process.env.NODE_ENV === "production") cookieOptions.secure = true;
   res.cookie("jwt", token, cookieOptions);
   res.status(code).json({
     status: "success",
@@ -59,10 +65,12 @@ const sendToken = (user: IUser, code: number, res: Response): void => {
   user.passwordChangeAt = undefined;
 
   const token = jwtToken(user._id);
-  const cookieOptions = {
+  const cookieOptions:CookieOptions = {
     expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     httpOnly: true,
   };
+  if (process.env.NODE_ENV === "production") cookieOptions.secure = true;
+
   res.cookie("jwt", token, cookieOptions);
   res.status(code).json({
     status: "success",
@@ -114,8 +122,8 @@ exports.protectRoute = CatchAsync(
     }
 
     const decode = jwt.verify(
-      token as string,
-      process.env.JWT_SECRET as string
+      token!,
+      process.env.JWT_SECRET!
     ) as jwt.JwtPayload;
 
     const freshUser = await UserModel.findById(decode.id);
@@ -218,7 +226,7 @@ exports.forgotPassword = CatchAsync(
       );
     }
     const resetToken = user!.sendResetPasswordToken();
-    const resetPasswordUrl = `${process.env.URL}/users/reset-password/${resetToken}`
+    const resetPasswordUrl = `${process.env.URL}/users/reset-password/${resetToken}`;
     if (user) {
       await user.save({ validateBeforeSave: false });
       new Email(user, resetPasswordUrl).sendPasswordReset();
@@ -226,17 +234,13 @@ exports.forgotPassword = CatchAsync(
     res.status(200).json({
       status: "success",
       message: "Please check your email for reset password",
-      resetPasswordUrl
+      resetPasswordUrl,
     });
   }
 );
 
 exports.resetPassword = CatchAsync(
-  async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> => {
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     console.log(req.params.token);
     const hashedToken = createHashed(req.params.token);
     const user = await UserModel.findOne({ passwordResetToken: hashedToken });
