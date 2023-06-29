@@ -1,3 +1,4 @@
+import { createHashed } from "./../Controllers/authController";
 import validator from "validator";
 import mongoose, { Document, Schema } from "mongoose";
 import { Country, Gender, Roles } from "../Types/enums";
@@ -15,15 +16,20 @@ export interface IUser extends Document {
   role: Roles;
   password: string | undefined;
   confirmPassword: string | undefined;
+  verified: boolean;
+  verificationToken?: string;
+  verificationTokenExpiresIn?: Date;
   passwordChangeAt?: Date;
   passwordResetToken?: string;
-  resetTokenExpiresIn?: number;
+  resetTokenExpiresIn?: Date;
+  createdAt: Date;
   correctPassword: (
     hashedPassword: string,
     userPassword: string
   ) => Promise<boolean>;
   passwordChanged: (JWTTimestamp: number) => boolean;
   sendResetPasswordToken: () => string;
+  verificationTokenFunc: () => string;
 }
 
 const userSchema: Schema<IUser> = new Schema<IUser>(
@@ -80,9 +86,16 @@ const userSchema: Schema<IUser> = new Schema<IUser>(
         message: "Passwords don't match",
       },
     },
+    verified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationToken: String,
+    verificationTokenExpiresIn: Date,
     passwordChangeAt: Date,
     passwordResetToken: String,
     resetTokenExpiresIn: Date,
+    createdAt: { type: Date, default: Date.now },
   },
   {
     toJSON: { virtuals: true },
@@ -131,20 +144,23 @@ userSchema.methods.passwordChanged = function (JWTTimestamp: number): boolean {
 
 userSchema.methods.sendResetPasswordToken = function (this: IUser): string {
   const resetToken = crypto.randomBytes(32).toString("hex");
-  this.passwordResetToken = crypto
-    .createHash("sha256")
-    .update(resetToken)
-    .digest("hex");
-
-  this.resetTokenExpiresIn = Date.now() + 10 * 60000;
-
+  this.passwordResetToken = createHashed(resetToken);
+  this.resetTokenExpiresIn = new Date(Date.now() + 10 * 30000);
   return resetToken;
+};
+
+userSchema.methods.verificationTokenFunc = function (this: IUser): string {
+  const token = crypto.randomBytes(32).toString("hex");
+  this.verificationToken = createHashed(token);
+  this.verificationTokenExpiresIn = new Date(Date.now() + 10 * 60000);
+  console.log("Triggered")
+  return token;
 };
 
 userSchema.virtual("tasks", {
   ref: "tasks",
   foreignField: "user",
-  localField: "_id"
+  localField: "_id",
 });
 
 const UserModel = mongoose.model<IUser>("users", userSchema);

@@ -2,9 +2,9 @@ import UserModel, { IUser } from "../Models/User.Model";
 import { Request, Response, NextFunction } from "express";
 import { CatchAsync, ErrorHandler } from "../utils/classes";
 import { CustomRequest } from "../Controllers/authController";
+const handlerFactory = require("./handlerFactory");
 import multer from "multer";
 const cloudinary = require("../utils/cloudinary");
-const handlerFactory = require("./handlerFactory");
 
 const multerFilter = (
   req: Request,
@@ -36,6 +36,10 @@ export const hashImage = async (
   if (!req.file) {
     return next(new ErrorHandler("Please upload a image", 400));
   }
+  if (req.file.size > 5 * 1024 * 1024)
+    return next(
+      new ErrorHandler(`Please upload a file with size less than 5MB!`, 400)
+    );
 
   const publicId = req.user.publicId;
   if (publicId) {
@@ -43,13 +47,13 @@ export const hashImage = async (
   }
 
   const originalFilename = req.file.originalname.split(".")[0];
-  const currentDate = new Date().toLocaleDateString();
+  const currentDate = new Date().toLocaleDateString().split("/").join("-");
   const currentTime = new Date().toLocaleTimeString().split(" ").join("_");
   const filename = `${originalFilename}_${currentDate}_${currentTime}`;
 
   const result = await cloudinary.uploader.upload(req.file.path, {
     public_id: filename,
-    folder: "user-images",
+    folder: "Todo/user-images",
     format: "webp",
     transformation: [
       { width: 600, height: 600, crop: "fill", gravity: "face", quality: 80 },
@@ -66,23 +70,21 @@ export const hashImage = async (
   });
 };
 
-export const destroyUserPhoto = async (
-  req: CustomRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  if (!(req.user as IUser).publicId) {
-    return next(new ErrorHandler("User doesn't have any photo", 400));
+export const destroyUserPhoto = CatchAsync(
+  async (req: CustomRequest, res: Response, next: NextFunction) => {
+    if (!(req.user as IUser).publicId) {
+      return next(new ErrorHandler("User doesn't have any photo", 400));
+    }
+    await cloudinary.uploader.destroy((req.user as IUser).publicId);
+    await UserModel.findByIdAndUpdate((req.user as IUser).id, {
+      image: "",
+      publicId: "",
+    });
+    res.status(201).json({
+      status: "deleted successfully",
+    });
   }
-  await cloudinary.uploader.destroy((req.user as IUser).publicId);
-  await UserModel.findByIdAndUpdate((req.user as IUser).id, {
-    image: "",
-    publicId: "",
-  });
-  res.status(201).json({
-    status: "deleted successfully",
-  });
-};
+);
 
 exports.getUsers = handlerFactory.getAll(UserModel);
 
@@ -92,14 +94,17 @@ exports.currentUser = CatchAsync(
       .select(
         "-passwordChangeAt -resetTokenExpiresIn -passwordResetToken -role -__v -publicId"
       )
-      .populate({path:"tasks", select:"-__v"});
+      .populate({ path: "tasks", select: "-__v" });
     res.status(200).json({ status: "success", user });
   }
 );
 
 exports.updateUser = handlerFactory.updateOne(UserModel);
 
-exports.getUserProfile = handlerFactory.getOne(UserModel, {path:"tasks", select:"-__v"});
+exports.getUserProfile = handlerFactory.getOne(UserModel, {
+  path: "tasks",
+  select: "-__v",
+});
 
 exports.beforeDeleteUser = (
   req: CustomRequest,

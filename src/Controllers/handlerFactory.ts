@@ -93,7 +93,7 @@ exports.updateOne = (Model: any) =>
 // Create One
 exports.createOne = (Model: any) =>
   CatchAsync(
-    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    async (req: CustomRequest, res: Response, next: NextFunction): Promise<void> => {
       const newDoc = await Model.create(req.body);
       res.status(201).json({ message: "Created Successfully", data: newDoc });
     }

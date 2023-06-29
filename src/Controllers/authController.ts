@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { Roles } from "../Types/enums";
 import Email from "../utils/email";
 import crypto from "crypto";
+import TaskModel from "../Models/Tasks.Model";
 
 interface CookieOptions {
   expires: Date;
@@ -16,6 +17,35 @@ export interface CustomRequest extends Request {
   user?: any;
   file?: any;
 }
+
+const sendEmailRequest = (
+  user: IUser,
+  res: Response,
+  identifier: string
+): void => {
+  const token = user.verificationTokenFunc();
+  const url = `${process.env.URL}/users/${identifier}/${token}`;
+
+  switch (identifier) {
+    case "signup":
+      new Email(user, url).sendVerificationMail();
+      break;
+    case "forget-password":
+      new Email(user, url).sendPasswordReset();
+      break;
+    default:
+      break;
+  }
+  user.save({validateBeforeSave:false})
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      message: "Please check your email to verify your account",
+      url,
+    },
+  });
+};
 
 exports.restrictTo = (...roles: Roles[]) => {
   return (req: CustomRequest, res: Response, next: NextFunction): void => {
@@ -31,7 +61,7 @@ exports.restrictTo = (...roles: Roles[]) => {
   };
 };
 
-const createHashed = (token: string): string => {
+export const createHashed = (token: string): string => {
   return crypto.createHash("sha256").update(token).digest("hex");
 };
 
@@ -40,10 +70,8 @@ const jwtToken = (id: string) =>
     expiresIn: process.env.JWT_EXPIRES_IN,
   });
 
-const createTokenAndSend = (user: IUser, code: number, res: Response): void => {
+const sendToken = (user: IUser, code: number, res: Response): void => {
   // Data is already stored in DB So we can remove this data to prevent it for sending as a response
-  user.password = undefined;
-  user.passwordChangeAt = undefined;
 
   const token = jwtToken(user._id);
   const cookieOptions: CookieOptions = {
@@ -51,25 +79,6 @@ const createTokenAndSend = (user: IUser, code: number, res: Response): void => {
     httpOnly: true,
   };
   if (process.env.NODE_ENV === "production") cookieOptions.secure = true;
-  res.cookie("jwt", token, cookieOptions);
-  res.status(code).json({
-    status: "success",
-    token,
-    data: user,
-  });
-};
-
-const sendToken = (user: IUser, code: number, res: Response): void => {
-  // Data is already stored in DB So we can remove this data to prevent it for sending as a response
-  user.password = undefined;
-  user.passwordChangeAt = undefined;
-
-  const token = jwtToken(user._id);
-  const cookieOptions:CookieOptions = {
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    httpOnly: true,
-  };
-  if (process.env.NODE_ENV === "production") cookieOptions.secure = true;
 
   res.cookie("jwt", token, cookieOptions);
   res.status(code).json({
@@ -77,12 +86,50 @@ const sendToken = (user: IUser, code: number, res: Response): void => {
     token,
   });
 };
+
+exports.signUpUser = CatchAsync(
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (req.body.role) next(new ErrorHandler("You cannot set the roles", 400));
+
+    const user = await UserModel.create(req.body);
+
+    if (!user) {
+      next(new ErrorHandler("Fail to create the user", 400));
+    }
+    sendEmailRequest(user, res, "signup");
+  }
+);
+
+exports.resendSignUpToken = CatchAsync(
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+     const user = await UserModel.findOne({ email: req.body.email });
+     if (!user) {
+       next(new ErrorHandler(`No user found with ${req.body.email}`, 400));
+     }
+    sendEmailRequest(user!, res, "signup");
+  }
+);
 
 exports.createUser = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const newUser: IUser = await UserModel.create(req.body);
-    new Email(newUser).sendWelcome();
-    createTokenAndSend(newUser, 200, res);
+    const hashedToken = createHashed(req.params.token);
+    const user = await UserModel.findOne({ verificationToken: hashedToken });
+    if (!user) {
+      return next(
+        new ErrorHandler("Token doesn't match or it is expired", 400)
+      );
+    }
+    await UserModel.findByIdAndUpdate(
+      user._id,
+      {
+        $unset: { verificationToken: 1, verificationTokenExpiresIn: 1 },
+        verified: true,
+      },
+      { new: true }
+    )!;
+
+    new Email(user).sendWelcome();
+    sendToken(user, 200, res);
   }
 );
 
@@ -96,6 +143,14 @@ exports.loginUser = CatchAsync(
     if (!user || !(await user?.correctPassword(password, user.password))) {
       next(new ErrorHandler("Please provide correct email and password", 400));
     }
+    if (user.verified === false)
+      next(
+        new ErrorHandler(
+          "Your account it not verified! Please verify your account",
+          400
+        )
+      );
+
     const token = sendToken(user, 200, res);
     res.status(200).json({ status: "success", token });
   }
@@ -152,14 +207,13 @@ exports.updatePassword = CatchAsync(
     next: NextFunction
   ): Promise<void> => {
     const { newPassword, confirmNewPassword } = req.body;
-    req.user.password = newPassword;
-    req.user.confirmPassword = confirmNewPassword;
-    await req.user.save();
-
-    sendToken(req.user, 200, res);
+    const user = await UserModel.findByIdAndUpdate(req.user._id, {
+      password: newPassword,
+      confirmPassword: confirmNewPassword,
+    });
+    sendToken(user as IUser, 200, res);
   }
 );
-
 exports.passwordAndEmailCheck = CatchAsync(
   async (
     req: CustomRequest,
@@ -225,23 +279,25 @@ exports.forgotPassword = CatchAsync(
         new ErrorHandler(`User with email:${req.body.email} doesn't exist`, 404)
       );
     }
-    const resetToken = user!.sendResetPasswordToken();
-    const resetPasswordUrl = `${process.env.URL}/users/reset-password/${resetToken}`;
     if (user) {
       await user.save({ validateBeforeSave: false });
-      new Email(user, resetPasswordUrl).sendPasswordReset();
+      sendEmailRequest(user, res, "forget-password");
     }
-    res.status(200).json({
-      status: "success",
-      message: "Please check your email for reset password",
-      resetPasswordUrl,
-    });
+  }
+);
+
+exports.resendForgotPassword = CatchAsync(
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const user = await UserModel.findOne({ email: req.body.email });
+    if (!user) {
+      next(new ErrorHandler(`No user found with ${req.body.email}`, 400));
+    }
+    sendEmailRequest(user!, res, "forget-password");
   }
 );
 
 exports.resetPassword = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    console.log(req.params.token);
     const hashedToken = createHashed(req.params.token);
     const user = await UserModel.findOne({ passwordResetToken: hashedToken });
     if (!user) {
@@ -249,12 +305,32 @@ exports.resetPassword = CatchAsync(
         new ErrorHandler("Token doesn't match or it is expired", 400)
       );
     }
-    user.password = req.body.password;
-    user.confirmPassword = req.body.confirmPassword;
-    user.passwordResetToken = undefined;
-    user.resetTokenExpiresIn = undefined;
-    await user.save();
-
+    await UserModel.findByIdAndUpdate(
+      user._id,
+      {
+        $unset: { passwordResetToken: 1, resetTokenExpiresIn: 1 },
+        password: req.body.newPassword,
+        confirmPassword: req.body.confirmNewPassword,
+      },
+      { new: true }
+    )!;
     sendToken(user, 200, res);
+  }
+);
+
+exports.CheckUser = CatchAsync(
+  async (
+    req: CustomRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    const task: any = await TaskModel.findById(req.params.id);
+    if (!task) {
+      next(new ErrorHandler("Task doesn't exist", 400));
+    }
+    if (task.user.equals(req.user._id)) {
+      next(new ErrorHandler("This task doesn't belong to you", 401));
+    }
+    next();
   }
 );
