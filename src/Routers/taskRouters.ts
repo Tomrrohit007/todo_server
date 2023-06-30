@@ -16,7 +16,6 @@ TaskRouter.route("/")
 TaskRouter.route("/:id")
   .patch(
     AuthController.CheckUser,
-    TaskControllers.uploadFilter,
     TaskControllers.updateTask
   )
   .delete(TaskControllers.deleteTask);

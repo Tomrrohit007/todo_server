@@ -145,15 +145,14 @@ userSchema.methods.passwordChanged = function (JWTTimestamp: number): boolean {
 userSchema.methods.sendResetPasswordToken = function (this: IUser): string {
   const resetToken = crypto.randomBytes(32).toString("hex");
   this.passwordResetToken = createHashed(resetToken);
-  this.resetTokenExpiresIn = new Date(Date.now() + 10 * 30000);
+  this.resetTokenExpiresIn = new Date(Date.now() + 5 * 60 * 1000);
   return resetToken;
 };
 
 userSchema.methods.verificationTokenFunc = function (this: IUser): string {
   const token = crypto.randomBytes(32).toString("hex");
   this.verificationToken = createHashed(token);
-  this.verificationTokenExpiresIn = new Date(Date.now() + 10 * 60000);
-  console.log("Triggered")
+  this.verificationTokenExpiresIn = new Date(Date.now() + 5 * 60 * 1000);
   return token;
 };
 

@@ -6,6 +6,7 @@ import { Roles } from "../Types/enums";
 import Email from "../utils/email";
 import crypto from "crypto";
 import TaskModel from "../Models/Tasks.Model";
+import { gapBetweenReq } from "../utils/rate-limit";
 
 interface CookieOptions {
   expires: Date;
@@ -23,20 +24,24 @@ const sendEmailRequest = (
   res: Response,
   identifier: string
 ): void => {
-  const token = user.verificationTokenFunc();
-  const url = `${process.env.URL}/users/${identifier}/${token}`;
+  let token: string = "";
+  let url: string = "";
 
   switch (identifier) {
     case "signup":
+      token = user.verificationTokenFunc();
+      url = `${process.env.URL}/users/${identifier}/${token}`;
       new Email(user, url).sendVerificationMail();
       break;
     case "forget-password":
+      token = user.sendResetPasswordToken();
+      url = `${process.env.URL}/users/${identifier}/${token}`;
       new Email(user, url).sendPasswordReset();
       break;
     default:
       break;
   }
-  user.save({validateBeforeSave:false})
+  user.save({ validateBeforeSave: false });
 
   res.status(200).json({
     status: "success",
@@ -102,10 +107,13 @@ exports.signUpUser = CatchAsync(
 
 exports.resendSignUpToken = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-     const user = await UserModel.findOne({ email: req.body.email });
-     if (!user) {
-       next(new ErrorHandler(`No user found with ${req.body.email}`, 400));
-     }
+    const user = await UserModel.findOne({ email: req.body.email });
+    if (!user) {
+      next(new ErrorHandler(`No user found with ${req.body.email}`, 400));
+    }
+    if (user?.verificationTokenExpiresIn) {
+      gapBetweenReq(user.verificationTokenExpiresIn, next);
+    }
     sendEmailRequest(user!, res, "signup");
   }
 );
@@ -279,22 +287,14 @@ exports.forgotPassword = CatchAsync(
         new ErrorHandler(`User with email:${req.body.email} doesn't exist`, 404)
       );
     }
-    if (user) {
-      await user.save({ validateBeforeSave: false });
-      sendEmailRequest(user, res, "forget-password");
+    if (user?.resetTokenExpiresIn) {
+      gapBetweenReq(user.resetTokenExpiresIn, next);
     }
+      await user?.save({ validateBeforeSave: false });
+      sendEmailRequest(user!, res, "forget-password");
   }
 );
 
-exports.resendForgotPassword = CatchAsync(
-  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const user = await UserModel.findOne({ email: req.body.email });
-    if (!user) {
-      next(new ErrorHandler(`No user found with ${req.body.email}`, 400));
-    }
-    sendEmailRequest(user!, res, "forget-password");
-  }
-);
 
 exports.resetPassword = CatchAsync(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {

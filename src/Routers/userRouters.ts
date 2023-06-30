@@ -1,10 +1,11 @@
 import { Router } from "express";
+import {loginRateLimiter} from "../utils/rate-limit";
 const UserController = require("../Controllers/userControllers");
 const AuthController = require("../Controllers/authController");
 const UserRouter = Router();
 
 // AUTH
-UserRouter.route("/login").post(AuthController.loginUser);
+UserRouter.route("/login").post(loginRateLimiter, AuthController.loginUser);
 
 UserRouter.route("/signup").post(AuthController.signUpUser);
 UserRouter.route("/signup/resend").post(
@@ -12,8 +13,7 @@ UserRouter.route("/signup/resend").post(
 );
 UserRouter.route("/verify-user/:token").post(AuthController.createUser);
 
-UserRouter.route("/forgot-password").post(AuthController.forgotPassword);
-UserRouter.route("/forgot-password/resend").post(AuthController.resendForgotPassword);
+UserRouter.route("/forgot-password").post( AuthController.forgotPassword);
 UserRouter.route("/reset-password/:token").post(AuthController.resetPassword);
 
 UserRouter.use(AuthController.protectRoute);
