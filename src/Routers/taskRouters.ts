@@ -10,7 +10,6 @@ TaskRouter.route("/")
   .get(TaskControllers.getAllTask)
   .post(
     TaskControllers.setUser,
-    TaskControllers.uploadFilter,
     TaskControllers.createTask
   );
 

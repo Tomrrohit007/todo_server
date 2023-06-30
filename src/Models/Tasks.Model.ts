@@ -7,7 +7,6 @@ export interface ITask extends mongoose.Document {
   date: Date;
   priority: Priority;
   status: string;
-  images?: string[];
   user: mongoose.Schema.Types.ObjectId;
 }
 
@@ -38,7 +37,6 @@ const taskSchema: mongoose.Schema<ITask> = new mongoose.Schema({
     enum: ["Incomplete", "In Progress", "Completed"],
     default: "In Progress",
   },
-  images: { type: [String], max: 4 },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "users",
