@@ -74,7 +74,7 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction): void => {
 
 mongoose.connect(process.env.MONGODB_URI!);
 
-const server = app.listen(process.env.PORT_NO, () => {
+const server = app.listen(process.env.PORT_NO || 4000, () => {
   console.log("Connected to DB and Listening...");
 });
 
