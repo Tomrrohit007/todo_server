@@ -30,16 +30,16 @@ The Todo App is a Node.js application built with TypeScript that helps you manag
    npm install
    ```
 
-4. Build the TypeScript code:
+4. To build and start in Production:
 
    ```
-   npm run build
+   npm run prod
    ```
 
-5. Start the application:
+5. To start the application in development:
 
    ```
-   npm start
+   npm run dev
    ```
 
 ## Technologies Used
@@ -207,4 +207,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Contact
 
-If you have any questions, suggestions, or feedback, please feel free to reach out to us at [your-email@example.com](mailto:your-email@example.com).
+If you have any questions, suggestions, or feedback, please feel free to reach out to us at [rohitwebdev007@gmail.com](mailto:rohitwebdev007@gmail.com).
